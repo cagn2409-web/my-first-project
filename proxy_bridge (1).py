@@ -197,31 +197,32 @@ class _LocalProxyBridge:
 def _inject_stealth(driver, profile):
     w = profile["device"]["w"]
     h = profile["device"]["h"]
-    # Chỉ ẩn cờ webdriver, không can thiệp window.location
+    # Sử dụng chuỗi thường và hàm replace để tránh lỗi cú pháp f-string
     stealth_js = """
-    (() => {{
-        Object.defineProperty(navigator, 'webdriver', {{ get: () => undefined }});
-        for (const key in window) {{
-            if (/^cdc_|^__webdriver|^__selenium|^__fxdriver/.test(key)) {{
-                try {{ delete window[key]; }} catch (e) {{}}
-            }}
-        }}
-        Object.defineProperty(navigator, 'platform', {{ get: () => 'Linux armv81' }});
-        Object.defineProperty(navigator, 'maxTouchPoints', {{ get: () => 5 }});
-        Object.defineProperty(navigator, 'hardwareConcurrency', {{ get: () => 8 }});
-        Object.defineProperty(navigator, 'deviceMemory', {{ get: () => 8 }});
-        Object.defineProperty(navigator, 'languages', {{ get: () => ['vi-VN', 'vi', 'en-US', 'en'] }});
-        Object.defineProperty(window, 'outerWidth', {{ get: () => {w} }});
-        Object.defineProperty(window, 'outerHeight', {{ get: () => {h} }});
-    
-                    const getParameter = WebGLRenderingContext.prototype.getParameter;
-                    WebGLRenderingContext.prototype.getParameter = function(parameter) {
-                        if (parameter === 37445) return 'Google Inc. (ARM)';
-                        if (parameter === 37446) return 'ANGLE (ARM, Mali-G715 Immortalis MC10, OpenGL ES 3.2)';
-                        return getParameter.apply(this, arguments);
-                    };
-            }})();
+    (() => {
+        Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+        for (const key in window) {
+            if (/^cdc_|^__webdriver|^__selenium|^__fxdriver/.test(key)) {
+                try { delete window[key]; } catch (e) {}
+            }
+        }
+        Object.defineProperty(navigator, 'platform', { get: () => 'Linux armv81' });
+        Object.defineProperty(navigator, 'maxTouchPoints', { get: () => 5 });
+        Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 8 });
+        Object.defineProperty(navigator, 'deviceMemory', { get: () => 8 });
+        Object.defineProperty(navigator, 'languages', { get: () => ['vi-VN', 'vi', 'en-US', 'en'] });
+        Object.defineProperty(window, 'outerWidth', { get: () => __WIDTH_VAL__ });
+        Object.defineProperty(window, 'outerHeight', { get: () => __HEIGHT_VAL__ });
+
+        const getParameter = WebGLRenderingContext.prototype.getParameter;
+        WebGLRenderingContext.prototype.getParameter = function(parameter) {
+            if (parameter === 37445) return 'Google Inc. (ARM)';
+            if (parameter === 37446) return 'ANGLE (ARM, Mali-G715 Immortalis MC10, OpenGL ES 3.2)';
+            return getParameter.apply(this, arguments);
+        };
+    })();
     """
+    stealth_js = stealth_js.replace("__WIDTH_VAL__", str(w)).replace("__HEIGHT_VAL__", str(h))
     try:
         driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {"source": stealth_js})
     except Exception as exc:
