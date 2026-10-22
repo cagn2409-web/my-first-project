@@ -28,7 +28,7 @@ def _beep_alert(freq=1000, duration=300, count=3, pause=0.15):
 
 
 def send_telegram_alert(message, item=None):
-    """Gửi thông báo qua Telegram Bot (hỗ trợ lấy token/chat_id từ item hoặc biến môi trường)"""
+    """Gửi thông báo qua Telegram Bot (hỗ trợ lấy token/chat_id từ item hoặc biến môi trường)[span_0](start_span)[span_0](end_span)"""
     try:
         token = (item and item.get('tg_token')) or os.environ.get('TG_TOKEN', 'YOUR_BOT_TOKEN')
         chat_id = (item and item.get('tg_chat_id')) or os.environ.get('TG_CHAT_ID', 'YOUR_CHAT_ID')
@@ -40,7 +40,7 @@ def send_telegram_alert(message, item=None):
 
 
 def dismiss_popups(driver):
-    """Tự động tìm và tắt các popup thông báo, quảng cáo, xin quyền mà không chạm vào Form đăng ký"""
+    """Tự động tìm và tắt các popup thông báo, quảng cáo, xin quyền mà không chạm vào Form đăng ký[span_1](start_span)[span_1](end_span)"""
     try:
         js_script = """
         function closePopups() {
@@ -149,7 +149,6 @@ def _is_captcha_present(driver):
                 return true;
             }
 
-            // 1. Kiểm tra Iframe Captcha (Lọc bỏ logo reCAPTCHA v3 chạy ngầm)
             const iframes = document.querySelectorAll('iframe');
             for (let ifr of iframes) {
                 if (!isVisible(ifr, 30, 30)) continue;
@@ -168,7 +167,6 @@ def _is_captcha_present(driver):
                 }
             }
 
-            // 2. Kiểm tra Captcha kéo trượt / ghép hình (Geetest, Aliyun, Slider Captcha)
             const sliders = document.querySelectorAll(
                 '.geetest_panel_box, .geetest_holder, .nc-container, .slidetounlock, ' +
                 '[class*="captcha-slider"], [class*="slider-captcha"], [class*="geetest"]'
@@ -177,7 +175,6 @@ def _is_captcha_present(driver):
                 if (isVisible(sl, 100, 30)) return true;
             }
 
-            // 3. Kiểm tra ô Input Captcha (Loại trừ ô Mã giới thiệu / Mã đại lý)
             const excludeKw = ['giới thiệu', 'gioi thieu', 'đại lý', 'dai ly', 'invite', 'refer', 'promo', 'affiliate', 'coupon'];
             const captchaKw = [
                 'captcha', 'mã xác minh', 'ma xac minh', 'mã kiểm tra', 'ma kiem tra',
@@ -197,7 +194,6 @@ def _is_captcha_present(driver):
                 if (captchaKw.some(kw => attr.includes(kw))) return true;
             }
 
-            // 4. Kiểm tra Hình ảnh (<img>) và Khung vẽ (<canvas>) chứa Captcha
             const visuals = document.querySelectorAll('img, canvas');
             for (let v of visuals) {
                 if (!isVisible(v, 40, 18)) continue;
@@ -220,7 +216,7 @@ def _is_captcha_present(driver):
 
 
 def _handle_captcha_if_needed(driver, doctor, item, game, stage_label=""):
-    """Tạm dừng an toàn, chụp ảnh, phát âm thanh và báo Telegram nếu phát hiện Captcha"""
+    """Tạm dừng an toàn, chụp ảnh, phát âm thanh và báo Telegram nếu phát hiện Captcha[span_2](start_span)[span_2](end_span)"""
     if not _is_captcha_present(driver):
         return False
 
@@ -243,9 +239,6 @@ def _handle_captcha_if_needed(driver, doctor, item, game, stage_label=""):
     except EOFError:
         time.sleep(15)
     return True
-# ==============================================================================
-# KHỐI 2 (PHẦN 2): HÀM RUN_FULL_FLOW, AI VISION ĐIỀN FORM, TÍCH CHECKBOX, SUBMIT & CHECK LỖI SĐT
-# ==============================================================================
 def run_full_flow(driver, url, game, item, results, doctor):
     try:
         print(f"🧑‍💻 Bắt đầu: {item.get('full_name')} | {game}...")
@@ -525,7 +518,7 @@ def run_full_flow(driver, url, game, item, results, doctor):
             _filled_count = 0
 
         # ==============================================================================
-        # 2. LỚP DỰ PHÒNG JS & AI DOCTOR (NẾU AI VISION KHÔNG TÌM THẤY TRƯỜNG)
+        # 2. LỚP DỰ PHÒNG JS & AI DOCTOR
         # ==============================================================================
         filled = []
         if _filled_count == 0:
@@ -612,7 +605,7 @@ def run_full_flow(driver, url, game, item, results, doctor):
         _handle_captcha_if_needed(driver, doctor, item, game, stage_label="form_dang_ky")
 
         # ==============================================================================
-        # 4. BẤM NÚT ĐĂNG KÝ (SUBMIT) & KIỂM TRA LỖI TỒN TẠI DỮ LIỆU
+        # 4. BẤM NÚT ĐĂNG KÝ (SUBMIT) & KIỂM TRA LỖI TỒN TẠI SỐ ĐIỆN THOẠI
         # ==============================================================================
         _reg_submitted = False
         try:
@@ -666,7 +659,6 @@ def run_full_flow(driver, url, game, item, results, doctor):
             except Exception:
                 pass
 
-            # Quét thông báo lỗi trùng SĐT / Tài khoản
             _verify_reg_js = """
             return (() => {
                 const bodyText = (document.body.innerText || '').toLowerCase();
@@ -714,7 +706,6 @@ def run_full_flow(driver, url, game, item, results, doctor):
             dismiss_popups(driver)
             time.sleep(random.uniform(0.8, 1.5))
 
-            # Tự động tìm và bấm vào mục "Rút tiền" / "Liên kết ngân hàng" để mở màn hình cho Khối 3
             try:
                 _withdraw_nav_xpath = (
                     "//*[self::a or self::button or self::div or self::span]"
@@ -736,7 +727,7 @@ def run_full_flow(driver, url, game, item, results, doctor):
             except Exception:
                 pass
         # ==============================================================================
-        # LUỒNG BỔ SUNG TỐI ƯU TOÀN DIỆN: MẬT KHẨU RÚT TIỀN & LIÊN KẾT NGÂN HÀNG
+        # 5. LUỒNG BỔ SUNG: MẬT KHẨU RÚT TIỀN, NGÂN HÀNG & BẤM XÁC NHẬN HOÀN TẤT
         # ==============================================================================
         try:
             import time as _b_time
@@ -835,25 +826,121 @@ def run_full_flow(driver, url, game, item, results, doctor):
                     if not _target_el.is_displayed():
                         continue
 
-                    # 1. Điền Mật khẩu rút tiền / Mã PIN
                     if any(kw in _hay for kw in ['mật khẩu rút', 'mat khau rut', 'fund password', 'pin', 'mã pin', 'withdrawal password', 'payment password', 'mật khẩu giao dịch']):
                         _safe_human_type(_target_el, _withdrawal_pass, "Mật khẩu rút tiền")
-
-                    # 2. Điền Chi nhánh ngân hàng
                     elif any(kw in _hay for kw in ['chi nhánh', 'chi nhanh', 'branch', 'tỉnh thành', 'phòng giao dịch', 'city', 'province']):
                         _safe_human_type(_target_el, _branch_name, f"Chi nhánh ({_branch_name})")
-
-                    # 3. Điền bổ sung Số tài khoản nếu chưa có
                     elif not _f['hasVal'] and any(kw in _hay for kw in ['số tài khoản', 'so tai khoan', 'stk', 'account number', 'bank account', 'số thẻ']):
                         _safe_human_type(_target_el, _v_bank, "Số tài khoản ngân hàng")
-
-                    # 4. Điền bổ sung Chủ tài khoản nếu chưa có
                     elif not _f['hasVal'] and any(kw in _hay for kw in ['chủ tài khoản', 'chu tai khoan', 'tên chủ thẻ', 'account holder', 'payee']):
                         _safe_human_type(_target_el, _v_name, "Chủ tài khoản")
                 except Exception:
                     continue
 
-            # Xử lý Dropdown chọn Ngân hàng
             _dropdown_xpath = (
                 "//*[contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'chọn ngân hàng') or "
-                "contains(translate(text(), '
+                "contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'select bank') or "
+                "contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'choose bank') or "
+                "contains(@class, 'bank-select') or contains(@id, 'bank')]"
+            )
+            _dropdown_triggers = driver.find_elements(_B_By.XPATH, _dropdown_xpath)
+
+            for _drop in _dropdown_triggers:
+                try:
+                    if _drop.is_displayed() and _drop.tag_name.lower() != 'input':
+                        print("[AI Banking] Đang mở danh sách chọn ngân hàng...")
+                        driver.execute_script("arguments[0].scrollIntoView({block: 'center', behavior: 'smooth'});", _drop)
+                        _b_time.sleep(_b_random.uniform(0.4, 0.7))
+
+                        try:
+                            _B_Chains(driver).move_to_element(_drop).pause(_b_random.uniform(0.2, 0.5)).click().perform()
+                        except Exception:
+                            driver.execute_script("arguments[0].click();", _drop)
+
+                        _b_time.sleep(_b_random.uniform(0.8, 1.5))
+
+                        _bank_options = driver.find_elements(
+                            _B_By.XPATH,
+                            f"//*[contains(translate(text(), 'abcdefghijklmnopqrstuvwxyz', 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'), '{_bank_name_target.upper()}')]"
+                        )
+                        for _opt in _bank_options:
+                            if _opt.is_displayed():
+                                driver.execute_script("arguments[0].scrollIntoView({block: 'center', behavior: 'smooth'});", _opt)
+                                _b_time.sleep(_b_random.uniform(0.3, 0.6))
+                                try:
+                                    _B_Chains(driver).move_to_element(_opt).click().perform()
+                                except Exception:
+                                    driver.execute_script("arguments[0].click();", _opt)
+
+                                print(f"[AI Banking] -> Đã chọn thành công ngân hàng: {_bank_name_target}")
+                                break
+                        break
+                except Exception:
+                    continue
+
+            # Bấm nút xác nhận / gửi đi hoàn tất liên kết ngân hàng
+            _b_time.sleep(0.5)
+            print("[AI Banking] Đang tìm và bấm nút xác nhận hoàn tất liên kết ngân hàng...")
+            _bank_submit_clicked = False
+            try:
+                _bank_submit_xpath = (
+                    "//*[self::button or self::input[@type='submit'] or self::div[@role='button'] or self::span[contains(@class, 'btn')] or self::a]"
+                    "[contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZĐ', 'abcdefghijklmnopqrstuvwxyzđ'), 'xác nhận') or "
+                    "contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZĐ', 'abcdefghijklmnopqrstuvwxyzđ'), 'gửi đi') or "
+                    "contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZĐ', 'abcdefghijklmnopqrstuvwxyzđ'), 'chấp nhận') or "
+                    "contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZĐ', 'abcdefghijklmnopqrstuvwxyzđ'), 'lưu') or "
+                    "contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZĐ', 'abcdefghijklmnopqrstuvwxyzđ'), 'hoàn tất') or "
+                    "contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZĐ', 'abcdefghijklmnopqrstuvwxyzđ'), 'ok') or "
+                    "contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'submit') or "
+                    "contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'confirm') or "
+                    "contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'save')]"
+                )
+                for _fbtn in driver.find_elements(_B_By.XPATH, _bank_submit_xpath):
+                    if _fbtn.is_displayed() and _fbtn.is_enabled():
+                        _txt = (_fbtn.text or _fbtn.get_attribute("value") or "").strip().lower()
+                        if len(_txt) < 30 and not any(bad in _txt for bad in ["hủy", "huỷ", "đóng", "quay lại"]):
+                            driver.execute_script("arguments[0].scrollIntoView({block: 'center', behavior: 'smooth'});", _fbtn)
+                            _b_time.sleep(0.4)
+                            try:
+                                _B_Chains(driver).move_to_element(_fbtn).pause(0.2).click().perform()
+                            except Exception:
+                                driver.execute_script("arguments[0].click();", _fbtn)
+                            print(f"[AI Banking] -> Đã bấm nút hoàn tất ngân hàng: '{_txt or 'Confirm'}'")
+                            _bank_submit_clicked = True
+                            break
+            except Exception as _sub_err:
+                print(f"[AI Banking] Không thể tự động bấm nút xác nhận ngân hàng: {_sub_err}")
+
+            print("[AI Banking] Hoàn tất luồng liên kết ngân hàng và mật khẩu rút tiền.")
+        except Exception as _bank_exc:
+            print(f"[AI Banking] Lưu ý luồng ngân hàng: {type(_bank_exc).__name__}: {_bank_exc}")
+
+        _handle_captcha_if_needed(driver, doctor, item, game, stage_label="sau_khi_luu_ngan_hang")
+
+        # ==============================================================================
+        # 6. HOÀN THÀNH TOÀN BỘ (SUCCESS): BÁO TELEGRAM & KẾT THÚC LUÔN
+        # ==============================================================================
+        time.sleep(2)
+        if doctor:
+            try:
+                doctor.snapshot(driver, "registration_completed")
+            except Exception:
+                pass
+
+        _beep_alert(freq=1200, duration=300, count=3, pause=0.2)
+        success_msg = f"🎉 [BOT SUCCESS] Đã đăng ký thành công và liên kết ngân hàng hoàn tất cho tài khoản: {item.get('username')} ({item.get('full_name')}) | Game: {game}"
+        send_telegram_alert(success_msg, item)
+
+        print("🚀 Đã hoàn tất toàn bộ quy trình đăng ký và liên kết ngân hàng thành công! Đã gửi thông báo về Telegram.")
+        return "SUCCESS"
+
+    except Exception as e:
+        try:
+            alert = driver.switch_to.alert
+            alert_text = alert.text
+            print(f"🚨 Web chặn bằng Alert: {alert_text}")
+            alert.accept()
+            return "LOCKED"
+        except Exception:
+            print(f"❌ Lỗi hệ thống Selenium: {e}")
+            return "FAILED"
