@@ -1,3 +1,17 @@
+import winsound
+import requests
+import os
+
+def send_telegram_alert(message, item=None):
+    """Gửi thông báo qua Telegram Bot (hỗ trợ lấy token/chat_id từ item hoặc biến môi trường)"""
+    try:
+        token = (item and item.get('tg_token')) or os.environ.get('TG_TOKEN', 'YOUR_BOT_TOKEN')
+        chat_id = (item and item.get('tg_chat_id')) or os.environ.get('TG_CHAT_ID', 'YOUR_CHAT_ID')
+        if token and chat_id and token != 'YOUR_BOT_TOKEN':
+            url = f"https://api.telegram.org/bot{token}/sendMessage"
+            requests.post(url, json={"chat_id": chat_id, "text": message}, timeout=5)
+    except Exception as e:
+        print(f"[Telegram Alert] Không thể gửi tin nhắn: {e}")
 # -*- coding: utf-8 -*-
 import time, random
 from selenium.webdriver.common.by import By
@@ -375,23 +389,220 @@ def run_full_flow(driver, url, game, item, results, doctor):
         except Exception as e: 
             print(f"⚠️ AI Doctor: {e}")
         
-    time.sleep(1)
-    if doctor:
+        # ==============================================================================
+    # 1. LUỒNG MẬT KHẨU RÚT TIỀN & LIÊN KẾT NGÂN HÀNG (TÍCH HỢP ACTIONCHAINS)
+    # ==============================================================================
+    try:
+        import time as _b_time
+        import random as _b_random
+        from selenium.webdriver.common.by import By as _B_By
+        from selenium.webdriver.common.action_chains import ActionChains
+
         try:
-            doctor.snapshot(driver, "manual_review")
+            driver.switch_to.default_content()
         except Exception:
             pass
-    print("🖐️ Đã điền biểu mẫu. Đang chờ người dùng kiểm tra và thao tác thủ công.")
-    return "MANUAL_REVIEW"
-    
-except Exception as e:
-    # BẮT LỖI ALERT TOÀN DIỆN
+
+        _b_time.sleep(_b_random.uniform(1.0, 2.0))
+        print("[AI Banking] Đang quét giao diện liên kết ngân hàng & mật khẩu rút tiền...")
+
+        _bank_scan_js = """
+        return (() => {
+            const inputs = Array.from(document.querySelectorAll('input:not([type="hidden"]):not([type="submit"]):not([type="button"])'));
+            const results = [];
+            for (let i = 0; i < inputs.length; i++) {
+                const el = inputs[i];
+                const rect = el.getBoundingClientRect();
+                const style = window.getComputedStyle(el);
+                if (rect.width < 20 || rect.height < 10 || style.display === 'none' || el.disabled) continue;
+                el.setAttribute('data-ai-bank-idx', String(i));
+                let ctx = '';
+                let p = el.parentElement;
+                for (let d = 0; d < 3 && p; d++) {
+                    if (p.innerText && p.innerText.length < 100) ctx += ' ' + p.innerText;
+                    p = p.parentElement;
+                }
+                results.push({
+                    idx: i,
+                    type: (el.getAttribute('type') || 'text').toLowerCase(),
+                    name: (el.getAttribute('name') || '').toLowerCase(),
+                    placeholder: (el.getAttribute('placeholder') || '').toLowerCase(),
+                    context: ctx.toLowerCase().replace(/\\s+/g, ' ').trim()
+                });
+            }
+            return results;
+        })();
+        """
+        _bank_fields = driver.execute_script(_bank_scan_js) or []
+        
+        _withdrawal_pass = item.get('withdrawal_pass') or pass_val
+        _bank_name_target = item.get('bank_name', 'Techcombank')
+        _branch_name = item.get('branch', 'Hà Nội')
+
+        for _f in _bank_fields:
+            _hay = f"{_f['name']} {_f['placeholder']} {_f['context']}"
+            try:
+                _target_el = driver.find_element(_B_By.CSS_SELECTOR, f"input[data-ai-bank-idx='{_f['idx']}']")
+                if not _target_el.is_displayed():
+                    continue
+                
+                if any(kw in _hay for kw in ['mật khẩu rút', 'mat khau rut', 'fund password', 'pin', 'mã pin', 'withdrawal password', 'payment password']):
+                    print(f"[AI Banking] -> Điền Mật khẩu rút tiền.")
+                    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", _target_el)
+                    ActionChains(driver).move_to_element(_target_el).pause(random.uniform(0.1, 0.3)).click().perform()
+                    _target_el.clear()
+                    _target_el.send_keys(_withdrawal_pass)
+                    _b_time.sleep(0.3)
+
+                elif any(kw in _hay for kw in ['chi nhánh', 'chi nhanh', 'branch', 'tỉnh thành', 'phòng giao dịch', 'city', 'province']):
+                    print(f"[AI Banking] -> Điền Chi nhánh: {_branch_name}")
+                    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", _target_el)
+                    ActionChains(driver).move_to_element(_target_el).pause(random.uniform(0.1, 0.3)).click().perform()
+                    _target_el.clear()
+                    _target_el.send_keys(_branch_name)
+                    _b_time.sleep(0.3)
+            except Exception:
+                continue
+
+        _dropdown_xpath = (
+            "//*[contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'chọn ngân hàng') or "
+            "contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'select bank') or "
+            "contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'choose bank') or "
+            "contains(@class, 'select') or contains(@class, 'dropdown') or contains(@class, 'el-select')]"
+        )
+        _dropdown_triggers = driver.find_elements(_B_By.XPATH, _dropdown_xpath)
+        
+        for _drop in _dropdown_triggers:
+            try:
+                if _drop.is_displayed():
+                    _drop_text = _drop.text.lower()
+                    if any(kw in _drop_text for kw in ['ngân hàng', 'bank', 'chọn', 'select', 'choose']) or len(_drop_text) < 40:
+                        print(f"[AI Banking] Đang mở danh sách chọn ngân hàng...")
+                        driver.execute_script("arguments[0].scrollIntoView({block: 'center', behavior: 'smooth'});", _drop)
+                        _b_time.sleep(0.3)
+                        
+    # ==============================================================================
+    # LUỒNG MẬT KHẨU RÚT TIỀN & LIÊN KẾT NGÂN HÀNG (TÍCH HỢP ACTIONCHAINS NGƯỜI THẬT)
+    # ==============================================================================
     try:
-        alert = driver.switch_to.alert
-        alert_text = alert.text
-        print(f"🚨 Web chặn bằng Alert: {alert_text}")
-        alert.accept()
-        return "LOCKED"
-    except:
-        print(f"❌ Lỗi hệ thống Selenium: {e}")
-        return "FAILED"
+        import time as _b_time
+        import random as _b_random
+        from selenium.webdriver.common.by import By as _B_By
+        from selenium.webdriver.common.action_chains import ActionChains
+
+        # Thoát khỏi iframe cũ để quét đúng trang quản lý
+        try:
+            driver.switch_to.default_content()
+        except Exception:
+            pass
+
+        _b_time.sleep(_b_random.uniform(1.0, 2.0))
+        print("[AI Banking] Đang quét giao diện liên kết ngân hàng & mật khẩu rút tiền...")
+
+        # Quét các ô input thông minh
+        _bank_scan_js = """
+        return (() => {
+            const inputs = Array.from(document.querySelectorAll('input:not([type="hidden"]):not([type="submit"]):not([type="button"])'));
+            const results = [];
+            for (let i = 0; i < inputs.length; i++) {
+                const el = inputs[i];
+                const rect = el.getBoundingClientRect();
+                const style = window.getComputedStyle(el);
+                if (rect.width < 20 || rect.height < 10 || style.display === 'none' || el.disabled) continue;
+                el.setAttribute('data-ai-bank-idx', String(i));
+                let ctx = '';
+                let p = el.parentElement;
+                for (let d = 0; d < 3 && p; d++) {
+                    if (p.innerText && p.innerText.length < 100) ctx += ' ' + p.innerText;
+                    p = p.parentElement;
+                }
+                results.push({
+                    idx: i,
+                    type: (el.getAttribute('type') || 'text').toLowerCase(),
+                    name: (el.getAttribute('name') || '').toLowerCase(),
+                    placeholder: (el.getAttribute('placeholder') || '').toLowerCase(),
+                    context: ctx.toLowerCase().replace(/\\s+/g, ' ').trim()
+                });
+            }
+            return results;
+        })();
+        """
+        _bank_fields = driver.execute_script(_bank_scan_js) or []
+        
+        _withdrawal_pass = item.get('withdrawal_pass') or pass_val
+        _bank_name_target = item.get('bank_name', 'Techcombank')
+        _branch_name = item.get('branch', 'Hà Nội')
+
+        for _f in _bank_fields:
+            _hay = f"{_f['name']} {_f['placeholder']} {_f['context']}"
+            try:
+                _target_el = driver.find_element(_B_By.CSS_SELECTOR, f"input[data-ai-bank-idx='{_f['idx']}']")
+                if not _target_el.is_displayed():
+                    continue
+                
+                # Điền Mật khẩu rút tiền / PIN
+                if any(kw in _hay for kw in ['mật khẩu rút', 'mat khau rut', 'fund password', 'pin', 'mã pin', 'withdrawal password', 'payment password']):
+                    print(f"[AI Banking] -> Điền Mật khẩu rút tiền.")
+                    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", _target_el)
+                    ActionChains(driver).move_to_element(_target_el).pause(random.uniform(0.1, 0.3)).click().perform()
+                    _target_el.clear()
+                    _target_el.send_keys(_withdrawal_pass)
+                    _b_time.sleep(0.3)
+
+                # Điền Chi nhánh ngân hàng
+                elif any(kw in _hay for kw in ['chi nhánh', 'chi nhanh', 'branch', 'tỉnh thành', 'phòng giao dịch', 'city', 'province']):
+                    print(f"[AI Banking] -> Điền Chi nhánh: {_branch_name}")
+                    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", _target_el)
+                    ActionChains(driver).move_to_element(_target_el).pause(random.uniform(0.1, 0.3)).click().perform()
+                    _target_el.clear()
+                    _target_el.send_keys(_branch_name)
+                    _b_time.sleep(0.3)
+            except Exception:
+                continue
+
+        # Xử lý Custom Dropdown chọn Ngân hàng (Dùng ActionChains + Fallback JS click)
+        _dropdown_xpath = (
+            "//*[contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'chọn ngân hàng') or "
+            "contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'select bank') or "
+            "contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'choose bank') or "
+            "contains(@class, 'select') or contains(@class, 'dropdown') or contains(@class, 'el-select')]"
+        )
+        _dropdown_triggers = driver.find_elements(_B_By.XPATH, _dropdown_xpath)
+        
+        for _drop in _dropdown_triggers:
+            try:
+                if _drop.is_displayed():
+                    _drop_text = _drop.text.lower()
+                    if any(kw in _drop_text for kw in ['ngân hàng', 'bank', 'chọn', 'select', 'choose']) or len(_drop_text) < 40:
+                        print(f"[AI Banking] Đang mở danh sách chọn ngân hàng...")
+                        driver.execute_script("arguments[0].scrollIntoView({block: 'center', behavior: 'smooth'});", _drop)
+                        _b_time.sleep(0.3)
+                        
+                        # Thử click bằng ActionChains trước, nếu bị che mới dùng JS click
+                        try:
+                            ActionChains(driver).move_to_element(_drop).pause(random.uniform(0.2, 0.4)).click().perform()
+                        except Exception:
+                            driver.execute_script("arguments[0].click();", _drop)
+                        
+                        _b_time.sleep(0.8) # Chờ khung option render xong trên DOM
+                        
+                        # Quét và chọn tên ngân hàng mục tiêu với cơ chế ActionChains tương tự
+                        _bank_options = driver.find_elements(_B_By.XPATH, f"//*[contains(text(), '{_bank_name_target}')]")
+                        for _opt in _bank_options:
+                            if _opt.is_displayed():
+                                driver.execute_script("arguments[0].scrollIntoView({block: 'center', behavior: 'smooth'});", _opt)
+                                _b_time.sleep(0.2)
+                                try:
+                                    ActionChains(driver).move_to_element(_opt).pause(random.uniform(0.1, 0.3)).click().perform()
+                                except Exception:
+                                    driver.execute_script("arguments[0].click();", _opt)
+                                print(f"[AI Banking] -> Đã chọn thành công ngân hàng: {_bank_name_target}")
+                                break
+                        break
+            except Exception:
+                continue
+
+        print("[AI Banking] Hoàn tất luồng liên kết ngân hàng và mật khẩu rút tiền.")
+    except Exception as _bank_exc:
+        print(f"[AI Banking] Lưu ý luồng ngân hàng: {type(_bank_exc).__name__}: {_bank_exc}")
+    # ==============================================================================
